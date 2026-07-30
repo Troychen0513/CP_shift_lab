@@ -1,0 +1,12 @@
+T0 unit test log
+================
+
+seed: 20260730
+command: D:\software\Anaconda\envs\medsafety\python.exe -m pytest -q
+returncode: 0
+
+[stdout]
+...............                                                          [100%]
+15 passed in 0.30s
+
+[stderr]
