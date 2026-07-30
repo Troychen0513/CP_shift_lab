@@ -1,0 +1,9 @@
+{
+  "alpha": 0.1,
+  "n_fit": 1000,
+  "n_cal": 500,
+  "n_target_u": 1000,
+  "n_test": 5000,
+  "model_degree": 5,
+  "seed": 20260730
+}
