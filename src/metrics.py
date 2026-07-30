@@ -1,57 +1,69 @@
 """Evaluation metrics for prediction intervals and importance weights."""
 
-from __future__ import annotations
-
 import numpy as np
 
 
-def coverage(y: np.ndarray, lower: np.ndarray, upper: np.ndarray) -> float:
-    """Return the fraction of labels covered by [lower, upper]."""
+# 覆盖率
+def coverage(y:np.ndarray,lower:np.ndarray,upper:np.ndarray) -> float:
+    """Compute the coverage of prediction intervals."""
     y = np.asarray(y, dtype=float)
     lower = np.asarray(lower, dtype=float)
     upper = np.asarray(upper, dtype=float)
-    return float(np.mean((lower <= y) & (y <= upper)))
+    
+    is_covered = (y >= lower) & (y <= upper)
+    return float(np.mean(is_covered))
 
 
-def interval_length(lower: np.ndarray, upper: np.ndarray) -> np.ndarray:
-    """Return interval lengths U-L for each test point."""
+def interval_length(lower:np.ndarray, upper:np.ndarray) -> np.ndarray:
+    """Compute the length of prediction intervals."""
     lower = np.asarray(lower, dtype=float)
     upper = np.asarray(upper, dtype=float)
+    
     return upper - lower
 
+# 平均区间长度
+def mean_interval_length(lower:np.ndarray, upper:np.ndarray) -> float:
+    """Compute the mean length of prediction intervals."""
+    lower = np.asarray(lower, dtype=float)
+    upper = np.asarray(upper, dtype=float)
+    
+    
+    lengths = interval_length(lower, upper)
+    return float(np.mean(lengths))
 
-def mean_interval_length(lower: np.ndarray, upper: np.ndarray) -> float:
-    """Return the average interval length."""
-    return float(np.mean(interval_length(lower, upper)))
 
-
-def interval_score(
-    y: np.ndarray,
-    lower: np.ndarray,
-    upper: np.ndarray,
-    alpha: float,
-) -> np.ndarray:
-    """Return the Winkler interval score for each test point."""
+# Winkler interval score 区间评分
+def interval_score(y:np.ndarray, lower:np.ndarray, upper:np.ndarray, alpha:float) -> float:
+    """Compute the Winkler interval score for prediction intervals."""
     y = np.asarray(y, dtype=float)
     lower = np.asarray(lower, dtype=float)
     upper = np.asarray(upper, dtype=float)
+    
+    lengths = interval_length(lower, upper)
+    penalty = (2 / alpha) * ((lower - y) * (y < lower) + (y - upper) * (y > upper))
+    
+    return lengths + penalty
 
-    length = upper - lower
-    below_penalty = (2 / alpha) * (lower - y) * (y < lower)
-    above_penalty = (2 / alpha) * (y - upper) * (y > upper)
-    return length + below_penalty + above_penalty
+def mean_interval_score(y, lower, upper, alpha) -> float:
+    scores = interval_score(y, lower, upper, alpha)
+    return float(np.mean(scores))
 
 
+# ESS 有效样本量
 def effective_sample_size(weights: np.ndarray) -> float:
     """Return ESS = (sum w)^2 / sum(w^2)."""
-    weights = np.asarray(weights, dtype=float)
+    weights = np.asarray(weights,dtype=float)
+    
     if len(weights) == 0:
         raise ValueError("weights must not be empty")
+
     if np.any(weights < 0):
         raise ValueError("weights must be nonnegative")
-
-    squared_sum = float(np.sum(weights**2))
-    if squared_sum == 0:
+    
+    denominator = np.sum(weights**2)
+    
+    if denominator == 0:
         return 0.0
+    
+    return float((np.sum(weights))**2 / denominator )
 
-    return float(np.sum(weights) ** 2 / squared_sum)
