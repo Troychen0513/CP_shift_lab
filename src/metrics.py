@@ -14,6 +14,28 @@ def coverage(y:np.ndarray,lower:np.ndarray,upper:np.ndarray) -> float:
     return float(np.mean(is_covered))
 
 
+# 分箱覆盖率
+def binned_coverage(x, y, lower, upper, n_bins: int = 5) -> dict:
+    """Compute coverage in equal-sized X bins."""
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    lower = np.asarray(lower, dtype=float)
+    upper = np.asarray(upper, dtype=float)
+
+    order = np.argsort(x)
+    bins = np.array_split(order, n_bins)
+    
+    result = {}
+    
+    for i, idx in enumerate(bins, start=1):
+        result[f"bin_{i}_coverage"] = coverage(y[idx], lower[idx], upper[idx])
+        
+    return result
+    
+    
+
+
+
 def interval_length(lower:np.ndarray, upper:np.ndarray) -> np.ndarray:
     """Compute the length of prediction intervals."""
     lower = np.asarray(lower, dtype=float)
