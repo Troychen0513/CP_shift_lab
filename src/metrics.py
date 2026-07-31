@@ -32,8 +32,6 @@ def binned_coverage(x, y, lower, upper, n_bins: int = 5) -> dict:
         
     return result
     
-    
-
 
 
 def interval_length(lower:np.ndarray, upper:np.ndarray) -> np.ndarray:

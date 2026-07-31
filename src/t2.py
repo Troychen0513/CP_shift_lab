@@ -1,6 +1,4 @@
-"""T1 workflow: ordinary Split CP on S0."""
-"""目的：验证最基础的 Split CP 在无分布偏移 S0 下，能给出接近目标的边际覆盖率"""
-
+"""T2 workflow: adaptive Split CP on S0."""
 
 import numpy as np
 
@@ -13,28 +11,42 @@ from src.metrics import (
     mean_interval_score,
 )
 from src.models import PolyModel
+from src.t1 import run_split_cp_once
 
-def fit_split_cp(config: dict, seed: int, scenario: str = "S0") -> dict:
-    """Fit one Split CP run and keep the data needed for metrics and plots."""
+
+
+# 自适应
+def fit_adaptive_cp(config: dict, seed: int, scenario: str = "S0")-> dict:
+    """Fit one adaptive Split CP run and keep data for metrics and plots."""
     rng = np.random.default_rng(seed)
-
+    
     x_fit, y_fit = sample_source_xy(config["n_fit"], rng)
     x_cal, y_cal = sample_source_xy(config["n_cal"], rng)
     x_test, y_test = sample_target_xy(scenario, config["n_test"], rng)
-
-    model = PolyModel(degree=config["model_degree"])
-    model.fit(x_fit, y_fit)
-
-    pred_cal = model.predict(x_cal)
-    scores = np.abs(y_cal - pred_cal)
+    
+    center_model = PolyModel(degree=config["model_degree"])
+    center_model.fit(x_fit,y_fit)
+    
+    pred_fit = center_model.predict(x_fit)
+    fit_residuals = np.abs(y_fit - pred_fit)   # 训练集上的绝对残差
+    
+    scale_model = PolyModel(degree=config["model_degree"])
+    scale_model.fit(x_fit, np.log(fit_residuals + 1e-4))   # 预测误差尺度 sigma_hat(x)，这里预测的是 log(residual)，原因是残差必须为正。
+    
+    scale_cal = np.exp(scale_model.predict(x_cal))
+    scale_test = np.exp(scale_model.predict(x_test))
+    
+    pred_cal = center_model.predict(x_cal)
+    scores = np.abs(y_cal - pred_cal) / scale_cal
     q = conformal_order_statistic(scores, alpha=config["alpha"])
-
-    pred_test = model.predict(x_test)
-    lower = pred_test - q
-    upper = pred_test + q
-
+    
+    pred_test = center_model.predict(x_test)
+    lower = pred_test - q * scale_test
+    upper = pred_test + q * scale_test
+    
     return {
-        "model": model,
+        "center_model": center_model,
+        "scale_model": scale_model,
         "x_fit": x_fit,
         "y_fit": y_fit,
         "x_cal": x_cal,
@@ -43,16 +55,16 @@ def fit_split_cp(config: dict, seed: int, scenario: str = "S0") -> dict:
         "y_test": y_test,
         "scores": scores,
         "q": q,
+        "scale_test": scale_test,
         "pred_test": pred_test,
         "lower": lower,
         "upper": upper,
     }
-
-
-
-def run_split_cp_once(config: dict, seed: int, scenario: str = "S0") -> dict:
-    """Run one ordinary Split CP experiment and return its metrics."""
-    result = fit_split_cp(config, seed, scenario)
+    
+    
+def run_adaptive_cp_once(config: dict, seed: int, scenario: str = "S0") -> dict:
+    """Run one adaptive Split CP experiment and return its metrics."""
+    result = fit_adaptive_cp(config, seed, scenario)
 
     x_test = result["x_test"]
     y_test = result["y_test"]
@@ -60,7 +72,7 @@ def run_split_cp_once(config: dict, seed: int, scenario: str = "S0") -> dict:
     upper = result["upper"]
 
     metrics = {
-        "method": "split_cp",
+        "method": "adaptive_cp",
         "scenario": scenario,
         "seed": seed,
         "q": result["q"],
@@ -78,68 +90,33 @@ def run_split_cp_once(config: dict, seed: int, scenario: str = "S0") -> dict:
     return metrics
 
 
-def run_m0_once(config: dict, seed: int, scenario: str = "S0") -> dict:
-    """Run one Gaussian residual interval baseline."""
-    rng = np.random.default_rng(seed)
-
-    x_fit, y_fit = sample_source_xy(config["n_fit"], rng)
-    x_cal, y_cal = sample_source_xy(config["n_cal"], rng)
-    x_test, y_test = sample_target_xy(scenario, config["n_test"], rng)
-
-    model = PolyModel(degree=config["model_degree"])
-    model.fit(x_fit, y_fit)
-
-    pred_cal = model.predict(x_cal)
-    sigma_hat = np.std(y_cal - pred_cal, ddof=1)
-
-    pred_test = model.predict(x_test)
-    radius = 1.645 * sigma_hat
-    lower = pred_test - radius
-    upper = pred_test + radius
-
-    metrics = {
-        "method": "m0_gaussian",
-        "scenario": scenario,
-        "seed": seed,
-        "q": radius,
-        "coverage": coverage(y_test, lower, upper),
-        "mean_length": mean_interval_length(lower, upper),
-        "mean_interval_score": mean_interval_score(
-            y_test,
-            lower,
-            upper,
-            config["alpha"],
-        ),
-    }
-
-    metrics.update(binned_coverage(x_test, y_test, lower, upper))
-    return metrics
-
-
-def run_t1_repeats(config: dict, n_repeats: int = 200) -> list[dict]:
-    """Run repeated S0 experiments for M0 and Split CP."""
+def run_t2_repeats(config: dict, n_repeats: int = 200) -> list[dict]:
+    """Run repeated S0 experiments for Split CP and adaptive CP."""
     base_seed = int(config["seed"])
     rows = []
 
     for i in range(n_repeats):
         seed = base_seed + i
-        rows.append(run_m0_once(config, seed, scenario="S0"))
+
         rows.append(run_split_cp_once(config, seed, scenario="S0"))
+        rows.append(run_adaptive_cp_once(config, seed, scenario="S0"))
 
     return rows
 
 
-def summarize_t1(rows: list[dict]) -> list[dict]:
-    """Summarize T1 repeated results by method."""
+def summarize_t2(rows: list[dict]) -> list[dict]:
+    """Summarize T2 repeated results by method."""
     summary = []
     methods = sorted({row["method"] for row in rows})
     bin_names = [f"bin_{i}_coverage" for i in range(1, 6)]
 
     for method in methods:
         method_rows = [row for row in rows if row["method"] == method]
+
         coverages = np.array([row["coverage"] for row in method_rows])
         lengths = np.array([row["mean_length"] for row in method_rows])
         scores = np.array([row["mean_interval_score"] for row in method_rows])
+
         bin_means = {
             f"{name}_mean": float(np.mean([row[name] for row in method_rows]))
             for name in bin_names
