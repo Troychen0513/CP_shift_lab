@@ -126,7 +126,15 @@ def run_t4_repeats(config: dict, n_repeats: int = 200) -> list[dict]:
 
     for i in range(n_repeats):
         seed = base_seed + i
-        rows.append(run_split_cp_once(config, seed, scenario="S1"))
+        split_row = run_split_cp_once(config, seed, scenario="S1")
+        split_row.update(
+            {
+                "ess": np.nan,
+                "max_weight": np.nan,
+                "infinite_interval_rate": np.nan,
+            }
+        )
+        rows.append(split_row)
         rows.append(run_oracle_wcp_once(config, seed, scenario="S1"))
 
     return rows

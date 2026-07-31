@@ -5,7 +5,7 @@ import numpy as np
 
 from pathlib import Path
 
-from src.data import sample_target_x, f_true, sigma_true
+from src.data import sample_target_x, f_true, sigma_true, true_density_ratio
 
 def tilted_density(x:np.ndarray,beta:float) -> np.ndarray:
     """Return the normalized density proportional to exp(beta*x) on [-2, 2].
@@ -424,6 +424,135 @@ def plot_t3_binned_coverage(summary_rows: list[dict], output_dir: Path) -> Path:
     ax.grid(axis="y", alpha=0.25)
 
     output_path = output_dir / "t3_binned_coverage.png"
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_t4_weight_curve(output_dir: Path, scenario: str = "S1") -> Path:
+    """Plot the true density ratio used by oracle WCP."""
+    output_dir.mkdir(exist_ok=True)
+
+    x_grid = np.linspace(-2, 2, 500)
+    weights = true_density_ratio(x_grid, scenario)
+
+    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
+
+    ax.plot(x_grid, weights, linewidth=2)
+    ax.set_title("T4 true density ratio")
+    ax.set_xlabel("x")
+    ax.set_ylabel("w(x)")
+    ax.grid(alpha=0.25)
+
+    output_path = output_dir / "t4_weight_curve.png"
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_t4_weighted_residuals(result: dict, output_dir: Path) -> Path:
+    """Compare calibration residuals before and after oracle weighting."""
+    output_dir.mkdir(exist_ok=True)
+
+    scores = result["scores"]
+    weights = result["weights_cal"]
+    q_split = result["q_split"]
+    finite_q_w = result["q_w"][np.isfinite(result["q_w"])]
+
+    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
+
+    ax.hist(scores, bins=40, density=True, alpha=0.45, label="unweighted")
+    ax.hist(scores, bins=40, density=True, weights=weights, alpha=0.45, label="weighted")
+    ax.axvline(q_split, color="C0", linestyle="--", linewidth=2, label="Split CP q")
+
+    if len(finite_q_w) > 0:
+        ax.axvline(
+            float(np.median(finite_q_w)),
+            color="C1",
+            linestyle="--",
+            linewidth=2,
+            label="median WCP q",
+        )
+
+    ax.set_title("T4 calibration residual distribution")
+    ax.set_xlabel("absolute residual")
+    ax.set_ylabel("density")
+    ax.legend()
+    ax.grid(alpha=0.25)
+
+    output_path = output_dir / "t4_weighted_residuals.png"
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_t4_threshold_by_x(result: dict, output_dir: Path) -> Path:
+    """Plot how oracle WCP thresholds change with test x."""
+    output_dir.mkdir(exist_ok=True)
+
+    x_test = result["x_test"]
+    q_w = result["q_w"]
+    finite_mask = np.isfinite(q_w)
+
+    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
+
+    ax.scatter(x_test[finite_mask], q_w[finite_mask], s=8, alpha=0.20, label="test points")
+
+    if np.any(finite_mask):
+        centers, means = binned_curve(x_test[finite_mask], q_w[finite_mask], n_bins=20)
+        ax.plot(centers, means, color="black", linewidth=2, label="binned mean")
+
+    ax.axhline(result["q_split"], color="red", linestyle="--", linewidth=1.5, label="Split CP q")
+    ax.set_title("T4 oracle WCP threshold by x")
+    ax.set_xlabel("x")
+    ax.set_ylabel("q_w(x)")
+    ax.legend()
+    ax.grid(alpha=0.25)
+
+    output_path = output_dir / "t4_threshold_by_x.png"
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_t4_method_compare(summary_rows: list[dict], output_dir: Path) -> Path:
+    """Compare coverage and interval length for Split CP and oracle WCP."""
+    output_dir.mkdir(exist_ok=True)
+
+    methods = [row["method"] for row in summary_rows]
+    coverage_values = [row["coverage_mean"] for row in summary_rows]
+    length_values = [row["mean_length"] for row in summary_rows]
+    score_values = [row["mean_interval_score"] for row in summary_rows]
+
+    x = np.arange(len(methods))
+
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4), dpi=150)
+
+    axes[0].bar(x, coverage_values)
+    axes[0].axhline(0.90, color="red", linestyle="--", linewidth=1.5)
+    axes[0].set_title("Coverage")
+    axes[0].set_ylim(0, 1.05)
+
+    axes[1].bar(x, length_values)
+    axes[1].set_title("Mean length")
+
+    axes[2].bar(x, score_values)
+    axes[2].set_title("Interval score")
+
+    for ax in axes:
+        ax.set_xticks(x)
+        ax.set_xticklabels(methods, rotation=20, ha="right")
+        ax.grid(axis="y", alpha=0.25)
+
+    output_path = output_dir / "t4_method_compare.png"
     fig.tight_layout()
     fig.savefig(output_path)
     plt.close(fig)

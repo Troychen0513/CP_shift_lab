@@ -16,11 +16,16 @@ from src.plots import (
     plot_t3_coverage_compare,
     plot_t3_density_comparison,
     plot_t3_residual_by_x,
+    plot_t4_method_compare,
+    plot_t4_threshold_by_x,
+    plot_t4_weight_curve,
+    plot_t4_weighted_residuals,
 )
 from src.t0 import run_pytest_and_write_log
 from src.t1 import fit_split_cp, run_t1_repeats, summarize_t1
 from src.t2 import fit_adaptive_cp, run_t2_repeats, summarize_t2
 from src.t3 import fit_t3_shift_cp, run_t3_repeats, summarize_t3
+from src.t4 import fit_oracle_wcp, run_t4_repeats, summarize_t4
 
 
 ROOT = Path(__file__).resolve().parent
@@ -30,10 +35,11 @@ T0_DIR = OUTPUT_DIR / "T0"
 T1_DIR = OUTPUT_DIR / "T1"
 T2_DIR = OUTPUT_DIR / "T2"
 T3_DIR = OUTPUT_DIR / "T3"
+T4_DIR = OUTPUT_DIR / "T4"
 
 
 def main() -> None:
-    """Generate T0-T3 outputs."""
+    """Generate T0-T4 outputs."""
     config = load_config(CONFIG_PATH)
     seed = int(config["seed"])
 
@@ -58,6 +64,12 @@ def main() -> None:
     t3_summary_rows = summarize_t3(t3_rows)
     t3_summary = save_rows(t3_summary_rows, T3_DIR, "t3_summary.csv")
 
+    t4_rows = run_t4_repeats(config, n_repeats=200)
+    t4_raw = save_rows(t4_rows, T4_DIR, "t4_raw_metrics.csv")
+
+    t4_summary_rows = summarize_t4(t4_rows)
+    t4_summary = save_rows(t4_summary_rows, T4_DIR, "t4_summary.csv")
+
     example = fit_split_cp(config, seed, scenario="S0")
     t1_example_plot = plot_t1_example(example, T1_DIR)
     t1_residual_plot = plot_t1_residuals(example, T1_DIR)
@@ -75,6 +87,12 @@ def main() -> None:
     t3_coverage_plot = plot_t3_coverage_compare(t3_summary_rows, T3_DIR)
     t3_binned_plot = plot_t3_binned_coverage(t3_summary_rows, T3_DIR)
 
+    t4_example = fit_oracle_wcp(config, seed, scenario="S1")
+    t4_weight_plot = plot_t4_weight_curve(T4_DIR, scenario="S1")
+    t4_residual_plot = plot_t4_weighted_residuals(t4_example, T4_DIR)
+    t4_threshold_plot = plot_t4_threshold_by_x(t4_example, T4_DIR)
+    t4_compare_plot = plot_t4_method_compare(t4_summary_rows, T4_DIR)
+
     print(f"saved: {t0_plot}")
     print(f"saved: {t0_log}")
     print(f"saved: {t1_raw}")
@@ -83,6 +101,8 @@ def main() -> None:
     print(f"saved: {t2_summary}")
     print(f"saved: {t3_raw}")
     print(f"saved: {t3_summary}")
+    print(f"saved: {t4_raw}")
+    print(f"saved: {t4_summary}")
     print(f"saved: {t1_example_plot}")
     print(f"saved: {t1_residual_plot}")
     print(f"saved: {t1_binned_plot}")
@@ -94,6 +114,10 @@ def main() -> None:
     print(f"saved: {t3_residual_plot}")
     print(f"saved: {t3_coverage_plot}")
     print(f"saved: {t3_binned_plot}")
+    print(f"saved: {t4_weight_plot}")
+    print(f"saved: {t4_residual_plot}")
+    print(f"saved: {t4_threshold_plot}")
+    print(f"saved: {t4_compare_plot}")
 
 
 if __name__ == "__main__":
