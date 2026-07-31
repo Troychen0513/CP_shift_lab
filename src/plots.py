@@ -270,3 +270,162 @@ def plot_t2_scale_diagnostic(adaptive_result: dict, output_dir: Path) -> Path:
     plt.close(fig)
 
     return output_path
+
+
+def binned_curve(x: np.ndarray, y: np.ndarray, n_bins: int = 20) -> tuple[np.ndarray, np.ndarray]:
+    """Return bin centers and bin means after sorting points by x."""
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+
+    order = np.argsort(x)
+    bins = np.array_split(order, n_bins)
+
+    centers = np.array([float(np.mean(x[idx])) for idx in bins], dtype=float)
+    means = np.array([float(np.mean(y[idx])) for idx in bins], dtype=float)
+    return centers, means
+
+
+def plot_t3_density_comparison(result: dict, output_dir: Path) -> Path:
+    """Plot source and target X densities for the T3 covariate shift case."""
+    output_dir.mkdir(exist_ok=True)
+
+    x_source = result["x_source_test"]
+    x_target = result["x_target_test"]
+    x_grid = np.linspace(-2, 2, 500)
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4), dpi=150, sharex=True, sharey=True)
+
+    axes[0].hist(x_source, bins=60, density=True, alpha=0.75, color="C0", edgecolor="white")
+    axes[0].plot(x_grid, np.full_like(x_grid, 0.25), color="black", linewidth=2)
+    axes[0].set_title("Source S0")
+
+    axes[1].hist(x_target, bins=60, density=True, alpha=0.75, color="C1", edgecolor="white")
+    axes[1].plot(x_grid, tilted_density(x_grid, 1.2), color="black", linewidth=2)
+    axes[1].set_title("Target S1")
+
+    for ax in axes:
+        ax.set_xlabel("x")
+        ax.grid(alpha=0.25)
+
+    axes[0].set_ylabel("density")
+    fig.suptitle("T3 source and target X densities")
+    fig.tight_layout()
+
+    output_path = output_dir / "t3_x_density.png"
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_t3_residual_by_x(result: dict, output_dir: Path) -> Path:
+    """Plot absolute residuals versus x for source and target test sets."""
+    output_dir.mkdir(exist_ok=True)
+
+    model = result["model"]
+    q = result["q"]
+
+    x_source = result["x_source_test"]
+    y_source = result["y_source_test"]
+    x_target = result["x_target_test"]
+    y_target = result["y_target_test"]
+
+    residual_source = np.abs(y_source - model.predict(x_source))
+    residual_target = np.abs(y_target - model.predict(x_target))
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4), dpi=150, sharex=True, sharey=True)
+
+    for ax, x, residual, title, color in [
+        (axes[0], x_source, residual_source, "Source S0", "C0"),
+        (axes[1], x_target, residual_target, "Target S1", "C1"),
+    ]:
+        ax.scatter(x, residual, s=8, alpha=0.16, color=color, edgecolors="none")
+        centers, means = binned_curve(x, residual, n_bins=20)
+        ax.plot(centers, means, color=color, linewidth=2)
+        ax.axhline(q, color="black", linestyle="--", linewidth=1.5, label="Split CP q")
+        ax.set_title(title)
+        ax.set_xlabel("x")
+        ax.grid(alpha=0.25)
+
+    axes[0].set_ylabel("|y - mu_hat(x)|")
+    axes[0].legend()
+
+    fig.suptitle("T3 absolute residuals by x")
+    fig.tight_layout()
+
+    output_path = output_dir / "t3_residual_by_x.png"
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_t3_coverage_compare(summary_rows: list[dict], output_dir: Path) -> Path:
+    """Compare overall Split CP coverage on source and target domains."""
+    output_dir.mkdir(exist_ok=True)
+
+    domains = [row["domain"] for row in summary_rows]
+    values = [row["coverage_mean"] for row in summary_rows]
+    x = np.arange(len(domains))
+
+    fig, ax = plt.subplots(figsize=(6, 4), dpi=150)
+
+    bars = ax.bar(x, values, color=["C0", "C1"])
+    ax.axhline(0.90, color="red", linestyle="--", linewidth=1.5, label="target 0.90")
+
+    for bar, value in zip(bars, values):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            value + 0.01,
+            f"{value:.3f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    ax.set_title("T3 coverage comparison")
+    ax.set_xlabel("domain")
+    ax.set_ylabel("coverage")
+    ax.set_xticks(x)
+    ax.set_xticklabels(domains)
+    ax.set_ylim(0, 1.05)
+    ax.legend()
+    ax.grid(axis="y", alpha=0.25)
+
+    output_path = output_dir / "t3_coverage_compare.png"
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_t3_binned_coverage(summary_rows: list[dict], output_dir: Path) -> Path:
+    """Compare five-bin coverage between source and target domains."""
+    output_dir.mkdir(exist_ok=True)
+
+    bin_names = [f"bin_{i}_coverage_mean" for i in range(1, 6)]
+    x = np.arange(1, 6)
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
+
+    for offset, row, color in zip([-width / 2, width / 2], summary_rows, ["C0", "C1"]):
+        values = [row[name] for name in bin_names]
+        ax.bar(x + offset, values, width=width, label=row["domain"], color=color)
+
+    ax.axhline(0.90, color="red", linestyle="--", linewidth=1.5, label="target 0.90")
+    ax.set_title("T3 binned coverage by X")
+    ax.set_xlabel("X bin")
+    ax.set_ylabel("coverage")
+    ax.set_xticks(x)
+    ax.set_ylim(0, 1.05)
+    ax.legend()
+    ax.grid(axis="y", alpha=0.25)
+
+    output_path = output_dir / "t3_binned_coverage.png"
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
