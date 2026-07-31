@@ -1,40 +1,68 @@
-## 实验目的
+# CP Shift Lab
 
-用一个**可完全控制真实分布**的**一维异方差回归**任务，依次完成
+一个用于学习 Conformal Prediction 的一维异方差回归实验。项目从普通 Split CP 出发，逐步展示异方差、协变量偏移、Oracle WCP 和 Estimated WCP 的关系。
 
-- 普通 Split CP
-- 自适应分数
-- 协变量偏移
-- Oracle WCP
-- Estimated WCP
-- 失效边界实验。
+## 实验框架
 
-最终目标不是“跑出一组覆盖率”，而是建立一套可以迁移到医学影像的 CP 实验与诊断流程。
+- `T0`：数据生成、评价指标、单元测试。
+- `T1`：普通 Split CP，在 `S0` 无偏移场景验证边际覆盖。
+- `T2`：自适应分数 CP，比较固定宽度区间和自适应宽度区间。
+- `T3`：构造 `S1` 协变量偏移，观察普通 Split CP 欠覆盖。
+- `T4`：使用真实密度比实现 Oracle WCP。
+- `T5`：使用域分类器估计密度比，实现 Estimated WCP。
 
-## 一、任务总览
+## 代码结构
 
-### 唯一核心问题
+```text
+CP_shift_lab/
+  config.json              # 样本量、alpha、模型阶数和随机种子
+  run_experiment.py        # 统一运行 T0-T5 并保存结果
+  README.md
+  requirements.txt
 
-**1. 当测试人群与校准人群的协变量分布不同时，普通 Split CP 为什么会失效；**
+  src/
+    data.py                # 数据生成、S0-S4、真实密度比
+    models.py              # 多项式回归模型
+    conformal.py           # Split CP 和 WCP 阈值规则
+    metrics.py             # coverage、length、interval score、ESS
+    io_utils.py            # 读取配置和保存 CSV
+    plots.py               # 绘图函数
+    t0.py                  # T0 测试日志
+    t1.py                  # 普通 Split CP
+    t2.py                  # 自适应 CP
+    t3.py                  # 协变量偏移诊断
+    t4.py                  # Oracle WCP
+    t5.py                  # Estimated WCP
 
-**2. WCP 如何修正；**
+  tests/
+    test_conformal.py
+    test_data.py
+    test_metrics.py
+    test_models.py
+    test_t5_domain_classifier.py
 
-**3. 在什么条件下即使使用 WCP 也不能声称覆盖有效？**
+  outputs/
+    T0/
+    T1/
+    T2/
+    T3/
+    T4/
+    T5/
+```
 
-共有八个任务，总体目标：**构造偏移 → 观察欠覆盖 → 用真实权重验证机制 → 用估计权重模拟真实应用 → 用 ESS、支持重叠和概念漂移判断结果是否可信。**
+## 运行
 
-注：阅读公式、运行现成代码或得到一次约 90% 的覆盖率，都不算完成。每个任务必须同时满足： **代码已实现、指定结果已输出、验收标准已通过、关键问题能解释** 。
+```powershell
+python -m pytest -q
+python run_experiment.py
+```
 
-### 每阶段成果清单
+## 主要输出
 
-- [ ] **代码：** 一条命令可从固定配置重新生成全部结果
+每个任务的结果保存在 `outputs/T0` 到 `outputs/T5` 中。主要包括：
 
-* [ ] **正确性证据：** 单元测试日志和数据独立性检查
-* [ ] **基础结果：** Split CP 示例区间图、残差阈值图、条件覆盖图
-* [ ] **偏移结果：** 源/目标分布与密度比图、目标域欠覆盖证据
-* [ ] **WCP 结果：** Split、Oracle WCP、Estimated WCP 的覆盖率与长度对比
-* [ ] **诊断结果：** 偏移强度、ESS、极端权重、无限区间与区间长度关系图
-* [ ] **总表：** S0–S4 × 各方法的重复实验结果
-* [ ] **结论：** 一段“什么时候可以相信 WCP，什么时候必须拒绝给出保证”的判断规则
+- `*_raw_metrics.csv`：每个随机种子的原始指标。
+- `*_summary.csv`：200 次重复实验的汇总结果。
+- `*.png`：对应任务的诊断图和方法对比图。
 
-## 二、固定实验设定
+当前主线结论：普通 Split CP 在 `S1` 协变量偏移下欠覆盖；Oracle WCP 可以用真实密度比修复；Estimated WCP 使用域分类器估计密度比，在当前实验中接近 Oracle WCP。

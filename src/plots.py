@@ -558,3 +558,93 @@ def plot_t4_method_compare(summary_rows: list[dict], output_dir: Path) -> Path:
     plt.close(fig)
 
     return output_path
+
+
+def plot_t5_weight_curve(result: dict, output_dir: Path, scenario: str = "S1") -> Path:
+    """Plot true and estimated density ratios across x."""
+    output_dir.mkdir(exist_ok=True)
+
+    domain_model = result["domain_model"]
+    x_grid = np.linspace(-2, 2, 500)
+    true_weights = true_density_ratio(x_grid, scenario)
+    estimated_weights = domain_model.density_ratio(x_grid, clipped=True)
+
+    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
+
+    ax.plot(x_grid, true_weights, linewidth=2, label="true w(x)")
+    ax.plot(x_grid, estimated_weights, linewidth=2, label="estimated w(x)")
+    ax.set_title("T5 true and estimated density ratios")
+    ax.set_xlabel("x")
+    ax.set_ylabel("weight")
+    ax.legend()
+    ax.grid(alpha=0.25)
+
+    output_path = output_dir / "t5_weight_curve.png"
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_t5_domain_prob_hist(result: dict, output_dir: Path) -> Path:
+    """Plot domain classifier probabilities for source and target X."""
+    output_dir.mkdir(exist_ok=True)
+
+    domain_model = result["domain_model"]
+    prob_source = domain_model.predict_target_prob(result["x_cal"])
+    prob_target = domain_model.predict_target_prob(result["x_target_u"])
+
+    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
+
+    ax.hist(prob_source, bins=40, alpha=0.55, density=True, label="source cal X")
+    ax.hist(prob_target, bins=40, alpha=0.55, density=True, label="target unlabeled X")
+    ax.set_title("T5 domain classifier probabilities")
+    ax.set_xlabel("P(target domain | x)")
+    ax.set_ylabel("density")
+    ax.legend()
+    ax.grid(alpha=0.25)
+
+    output_path = output_dir / "t5_domain_prob_hist.png"
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_t5_method_compare(summary_rows: list[dict], output_dir: Path) -> Path:
+    """Compare Split CP, oracle WCP, and estimated WCP."""
+    output_dir.mkdir(exist_ok=True)
+
+    methods = [row["method"] for row in summary_rows]
+    coverage_values = [row["coverage_mean"] for row in summary_rows]
+    length_values = [row["mean_length"] for row in summary_rows]
+    score_values = [row["mean_interval_score"] for row in summary_rows]
+
+    x = np.arange(len(methods))
+
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4), dpi=150)
+
+    axes[0].bar(x, coverage_values)
+    axes[0].axhline(0.90, color="red", linestyle="--", linewidth=1.5)
+    axes[0].set_title("Coverage")
+    axes[0].set_ylim(0, 1.05)
+
+    axes[1].bar(x, length_values)
+    axes[1].set_title("Mean length")
+
+    axes[2].bar(x, score_values)
+    axes[2].set_title("Interval score")
+
+    for ax in axes:
+        ax.set_xticks(x)
+        ax.set_xticklabels(methods, rotation=20, ha="right")
+        ax.grid(axis="y", alpha=0.25)
+
+    output_path = output_dir / "t5_method_compare.png"
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    return output_path
